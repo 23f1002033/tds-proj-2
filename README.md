@@ -1,3 +1,13 @@
+---
+title: Universal Quiz Solver API
+emoji: 🧠
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+license: mit
+---
+
 # Universal Quiz Solver API
 
 An autonomous Quiz-Solver Agent that accepts teacher-delivered tasks via HTTP POST, visits JavaScript-rendered quiz pages, interprets instructions, executes data pipelines, and returns correctly formatted JSON answers.
