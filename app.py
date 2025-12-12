@@ -35,6 +35,54 @@ app = FastAPI(
 SOLVER_SECRET = os.getenv("SOLVER_SECRET", "default_secret")
 
 
+@app.get("/")
+async def root():
+    """Root endpoint with API documentation."""
+    from fastapi.responses import HTMLResponse
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Universal Quiz Solver API</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #1a1a2e; color: #eee; }
+            h1 { color: #00d9ff; }
+            code { background: #16213e; padding: 2px 8px; border-radius: 4px; }
+            pre { background: #16213e; padding: 15px; border-radius: 8px; overflow-x: auto; }
+            .endpoint { background: #0f3460; padding: 15px; margin: 10px 0; border-radius: 8px; }
+            .method { color: #00ff88; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <h1>🧠 Universal Quiz Solver API</h1>
+        <p>An autonomous Quiz-Solver Agent that handles JavaScript-rendered quiz pages.</p>
+        
+        <h2>Endpoints</h2>
+        <div class="endpoint">
+            <span class="method">POST</span> <code>/solve</code>
+            <p>Submit a quiz URL to solve</p>
+            <pre>{
+  "url": "https://example.com/quiz",
+  "secret": "your_secret",
+  "timeout": 180
+}</pre>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method">GET</span> <code>/status/{task_id}</code>
+            <p>Check the status of a solving task</p>
+        </div>
+        
+        <div class="endpoint">
+            <span class="method">GET</span> <code>/health</code>
+            <p>Health check endpoint</p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+
 class QuizRequest(BaseModel):
     """Request model for quiz solving endpoint."""
     url: str
