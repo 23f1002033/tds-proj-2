@@ -5,6 +5,7 @@ FROM python:3.10-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install system dependencies for Playwright and Tesseract
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -45,8 +46,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and Chromium
-RUN playwright install --with-deps chromium
+# Install Playwright browsers globally (before creating user)
+RUN playwright install --with-deps chromium && \
+    chmod -R 755 /ms-playwright
 
 # Copy application code
 COPY . .
@@ -57,7 +59,9 @@ RUN mkdir -p models && \
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /ms-playwright
+
 USER appuser
 
 # Expose port for Hugging Face Spaces
