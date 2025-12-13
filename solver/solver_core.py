@@ -119,6 +119,10 @@ class QuizSolver:
         output_format = detect_output_format(question)
         formatted_answer = self._format_answer(answer, output_format)
         
+        # Ensure we never submit empty answers
+        if formatted_answer == '' or formatted_answer is None:
+            formatted_answer = 'start quiz'
+        
         # Submit answer
         submit_url = page_data.get('submit_url')
         submit_result = None
