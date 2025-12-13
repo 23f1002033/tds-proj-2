@@ -44,6 +44,9 @@ class TaskType(Enum):
     API_MERGE = "api_merge"
     JWT_DECODE = "jwt_decode"
     ENCODING_DECODE = "encoding_decode"
+    AUDIO_TRANSCRIBE = "audio_transcribe"
+    SHELL_COMMAND = "shell_command"
+    FILE_SHARDS = "file_shards"
     
     TEXT_EXTRACT = "text_extract"
     JSON_RESPONSE = "json_response"
@@ -98,6 +101,15 @@ class TaskClassifier:
         TaskType.JWT_DECODE: ['jwt', 'jwt token', 'secret_code', 'decode a jwt', 'decode the jwt'],
         TaskType.ENCODING_DECODE: ['rot13', 'hex', 'encoding chain', 'multi-layer encoding', 'unravel'],
         
+        # Audio
+        TaskType.AUDIO_TRANSCRIBE: ['audio', 'mp3', 'wav', 'transcribe', 'passphrase', 'listen', 'speech', 'recording'],
+        
+        # Shell/System
+        TaskType.SHELL_COMMAND: ['git', 'npm', 'pip', 'uv', 'command', 'terminal', 'shell', 'run command'],
+        
+        # File operations
+        TaskType.FILE_SHARDS: ['shard', 'fragment', 'reconstruct', 'piece', 'split file', 'combine files'],
+        
         # Text/JSON
         TaskType.TEXT_EXTRACT: ['extract', 'find', 'locate', 'parse'],
         TaskType.JSON_RESPONSE: ['json', 'object', 'dictionary', 'key-value'],
@@ -105,6 +117,9 @@ class TaskClassifier:
     
     # Priority order for task types (higher priority types checked first)
     PRIORITY_ORDER = [
+        TaskType.AUDIO_TRANSCRIBE,  # Audio tasks detected early
+        TaskType.FILE_SHARDS,  # File shard tasks
+        TaskType.SHELL_COMMAND,  # Shell commands
         TaskType.ENCODING_DECODE,  # Encoding tasks detected early
         TaskType.JWT_DECODE,  # JWT tasks should be detected early
         TaskType.API_MERGE, TaskType.API_CALL,

@@ -167,9 +167,18 @@ class QuizSolver:
             
             elif task_type == TaskType.ENCODING_DECODE:
                 return await self._solve_encoding(page_data, question)
+            
+            elif task_type == TaskType.AUDIO_TRANSCRIBE:
+                return await self._solve_audio(files, page_data, question)
+            
+            elif task_type == TaskType.SHELL_COMMAND:
+                return await self._solve_shell(question, page_data)
+            
+            elif task_type == TaskType.FILE_SHARDS:
+                return await self._solve_shards(files, page_data, question)
                 
             else:
-                return await self._solve_text(question, page_data)
+                return await self._solve_with_gemini_enhanced(question, page_data, files)
                 
         except Exception as e:
             logger.error(f"Solver execution error: {e}")
@@ -539,6 +548,204 @@ class QuizSolver:
         except Exception as e:
             logger.error(f"Encoding solving failed: {e}")
             return await self._solve_with_gemini(question, page_data)
+    
+    async def _solve_audio(self, files: List, page_data: Dict, question: str) -> Any:
+        """Solve audio transcription tasks using Gemini."""
+        # Download audio file if available
+        audio_files = [f for f in files if f[1] in ['mp3', 'wav', 'ogg', 'm4a', 'webm']]
+        
+        if not audio_files and page_data.get('file_links'):
+            for link in page_data['file_links']:
+                link_lower = link.lower()
+                if any(ext in link_lower for ext in ['.mp3', '.wav', '.ogg', '.m4a', '.webm']):
+                    try:
+                        downloaded = self.downloader.download(link)
+                        audio_files.append(downloaded)
+                    except Exception as e:
+                        logger.warning(f"Failed to download audio: {e}")
+        
+        if not audio_files:
+            logger.warning("No audio files found, falling back to Gemini")
+            return await self._solve_with_gemini_enhanced(question, page_data, files)
+        
+        # For Gemini audio transcription, we need to use the multimodal API
+        # For now, use enhanced Gemini prompt with audio context
+        try:
+            audio_path = audio_files[0][0]
+            logger.info(f"Processing audio file: {audio_path}")
+            
+            # Try using Gemini with audio file description
+            prompt = f"""This is an audio transcription task.
+
+Question: {question}
+
+The audio file is at: {audio_path}
+
+Based on the question, what is likely being asked? Common audio tasks include:
+- Transcribing speech to text
+- Finding a passphrase or code word
+- Identifying specific spoken content
+
+If this is a passphrase question, provide the most likely passphrase format.
+Answer:"""
+            
+            if self.gemini_client:
+                result = self.gemini_client.call(prompt)
+                return result.get('text', '').strip()
+            
+            return ""
+        except Exception as e:
+            logger.error(f"Audio solving failed: {e}")
+            return await self._solve_with_gemini_enhanced(question, page_data, files)
+    
+    async def _solve_shell(self, question: str, page_data: Dict) -> Any:
+        """Solve shell command tasks (git, uv, npm, etc.)."""
+        import subprocess
+        
+        question_lower = question.lower()
+        
+        try:
+            # Git commands
+            if 'git' in question_lower:
+                if 'commit' in question_lower and 'hash' in question_lower:
+                    # Get commit hash
+                    result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
+                                          capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        return result.stdout.strip()[:7]
+                        
+                elif 'branch' in question_lower:
+                    result = subprocess.run(['git', 'branch', '--show-current'], 
+                                          capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        return result.stdout.strip()
+            
+            # UV dependency check
+            if 'uv' in question_lower:
+                if 'version' in question_lower:
+                    result = subprocess.run(['uv', '--version'], 
+                                          capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        return result.stdout.strip()
+            
+            # Fall back to Gemini for complex shell tasks
+            return await self._solve_with_gemini_enhanced(question, page_data, [])
+            
+        except Exception as e:
+            logger.error(f"Shell solving failed: {e}")
+            return await self._solve_with_gemini_enhanced(question, page_data, [])
+    
+    async def _solve_shards(self, files: List, page_data: Dict, question: str) -> Any:
+        """Solve file shard reconstruction tasks."""
+        # Download all shard files
+        shard_files = []
+        
+        for link in page_data.get('file_links', []):
+            if any(kw in link.lower() for kw in ['shard', 'part', 'fragment', 'piece']):
+                try:
+                    downloaded = self.downloader.download(link)
+                    shard_files.append(downloaded)
+                except Exception as e:
+                    logger.warning(f"Failed to download shard: {e}")
+        
+        if not shard_files:
+            return await self._solve_with_gemini_enhanced(question, page_data, files)
+        
+        try:
+            # Sort shards by filename (usually numbered)
+            shard_files.sort(key=lambda x: x[0])
+            
+            # Read and concatenate shards
+            combined_content = b''
+            for shard_path, _ in shard_files:
+                with open(shard_path, 'rb') as f:
+                    combined_content += f.read()
+            
+            # Try to decode as text
+            try:
+                text_content = combined_content.decode('utf-8')
+                logger.info(f"Reconstructed file content: {text_content[:100]}...")
+                
+                # Look for answer patterns
+                if 'password' in question.lower() or 'code' in question.lower():
+                    # Extract password/code patterns
+                    patterns = re.findall(r'[A-Z0-9_]{4,}', text_content)
+                    if patterns:
+                        return patterns[0]
+                
+                return text_content.strip()
+            except UnicodeDecodeError:
+                # Binary file - return base64
+                import base64
+                return base64.b64encode(combined_content).decode('utf-8')
+                
+        except Exception as e:
+            logger.error(f"Shard solving failed: {e}")
+            return await self._solve_with_gemini_enhanced(question, page_data, files)
+    
+    async def _solve_with_gemini_enhanced(self, question: str, page_data: Dict, files: List) -> Any:
+        """Enhanced Gemini fallback with more context for complex tasks."""
+        if not self.gemini_client:
+            return ""
+        
+        try:
+            # Build comprehensive context
+            context_parts = []
+            
+            # Add file contents if available
+            for filepath, filetype in files[:3]:  # Limit to 3 files
+                try:
+                    if filetype in ['csv', 'txt', 'json', 'md']:
+                        with open(filepath, 'r') as f:
+                            content = f.read()[:2000]
+                            context_parts.append(f"File ({filetype}): {content}")
+                except:
+                    pass
+            
+            # Add table data
+            if page_data.get('tables'):
+                for i, table in enumerate(page_data['tables'][:2]):
+                    context_parts.append(f"Table {i+1}: {str(table)[:500]}")
+            
+            # Add API endpoints
+            if page_data.get('api_endpoints'):
+                context_parts.append(f"API endpoints: {page_data['api_endpoints']}")
+            
+            context = "\n\n".join(context_parts)
+            
+            prompt = f"""You are a quiz-solving AI. Solve this problem step by step and provide ONLY the final answer.
+
+QUESTION: {question}
+
+AVAILABLE DATA:
+{context}
+
+INSTRUCTIONS FROM PAGE:
+{page_data.get('instructions', [])[:10]}
+
+Think through this carefully:
+1. What is being asked?
+2. What data do I have?
+3. What computation or extraction is needed?
+
+IMPORTANT: Return ONLY the final answer - no explanation. If it's a number, return the number. If it's text, return the text. If it's JSON, return valid JSON.
+
+ANSWER:"""
+            
+            result = self.gemini_client.call(prompt, {'temperature': 0.1, 'maxOutputTokens': 500})
+            answer = result.get('text', '').strip()
+            
+            # Clean up the answer
+            answer = answer.strip('`').strip('"').strip("'")
+            if answer.startswith('```'):
+                answer = answer.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            
+            logger.info(f"Gemini enhanced answer: {answer}")
+            return answer
+            
+        except Exception as e:
+            logger.error(f"Gemini enhanced fallback failed: {e}")
+            return ""
         
     async def _solve_text(self, question: str, page_data: Dict) -> str:
         """Solve text extraction tasks."""
