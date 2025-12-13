@@ -210,6 +210,14 @@ class QuizSolver:
         """Solve numeric computation tasks."""
         df = None
         
+        # For COUNT tasks, prefer using Gemini with file context
+        if task_type == TaskType.NUMERIC_COUNT:
+            return await self._solve_with_gemini_enhanced(
+                page_data.get('question', ''), 
+                page_data, 
+                files
+            )
+        
         # Load data from file
         for f in files:
             if f['type'] in ['csv', 'tsv', 'xlsx', 'xls']:
@@ -225,7 +233,11 @@ class QuizSolver:
                 df = self.csv_processor._clean_dataframe(df)
                 
         if df is None:
-            return 0.0
+            return await self._solve_with_gemini_enhanced(
+                page_data.get('question', ''),
+                page_data,
+                files
+            )
             
         # Determine column
         column = details.get('target_column')
