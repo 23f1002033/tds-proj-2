@@ -260,26 +260,50 @@ class QuizSolver:
         
     async def _solve_pdf(self, files: List, details: Dict, page_data: Dict) -> Any:
         """Solve PDF extraction tasks."""
+        question = page_data.get('question', '')
+        
         for f in files:
             if f['type'] == 'pdf':
                 processor = PDFProcessor(f['path'])
-                page_num = details.get('page_number')
                 
-                # Try table extraction first
-                tables = processor.extract_tables(page_num)
+                # Extract all text from PDF
+                text = processor.extract_text()
+                
+                # Use Gemini to extract the specific value requested
+                if text and self.gemini_client:
+                    prompt = f"""Extract the specific numeric value requested from this PDF text.
+
+QUESTION: {question}
+
+PDF CONTENT:
+{text[:8000]}
+
+Look for the exact value mentioned in the question (e.g., "Q2 Summary" line, specific totals).
+Return ONLY the numeric value, rounded to 2 decimal places.
+
+ANSWER:"""
+                    result = self.gemini_client.call(prompt, {'temperature': 0.1, 'maxOutputTokens': 100})
+                    if result:
+                        answer = result.get('text', '').strip()
+                        # Extract number from answer
+                        import re
+                        nums = re.findall(r'-?\d+\.?\d*', answer.replace(',', ''))
+                        if nums:
+                            return round(float(nums[0]), 2)
+                
+                # Fallback: try table extraction
+                tables = processor.extract_tables()
                 if tables:
                     import pandas as pd
                     table = tables[0]
                     if len(table) > 1:
                         df = pd.DataFrame(table[1:], columns=table[0])
-                        # Return sum of first numeric column
                         numeric = self.csv_processor.get_numeric_columns(
                             self.csv_processor._clean_dataframe(df))
                         if numeric:
                             return float(df[numeric[0]].sum())
                             
-                # Fall back to text extraction
-                text = processor.extract_text(page_num)
+                # Last resort: return extracted text
                 return text[:1000] if text else ""
                 
         return ""
