@@ -100,16 +100,24 @@ class PageParser:
         
     def _extract_submit_url(self, soup: BeautifulSoup, html: str) -> Optional[str]:
         """Extract the answer submission URL."""
-        text = html.lower()
+        # Get plain text content for pattern matching (handles split HTML tags)
+        page_text = soup.get_text(separator=' ')
         
-        # Try regex patterns
+        # Try regex patterns on text content first
         for pattern in self.SUBMIT_PATTERNS:
-            match = re.search(pattern, html, re.IGNORECASE)
+            match = re.search(pattern, page_text, re.IGNORECASE)
             if match:
                 url = match.group(1) if match.groups() else match.group(0)
                 url = self._resolve_url(url.strip('"\''))
                 if self._is_valid_url(url):
                     return url
+        
+        # Look for /submit/N pattern in text content (allow optional space from HTML parsing)
+        submit_pattern = r'/submit/\s*(\d+)'
+        match = re.search(submit_pattern, page_text)
+        if match:
+            # Reconstruct URL without space
+            return self._resolve_url(f'/submit/{match.group(1)}')
         
         # Look for links containing "submit" or "answer"
         for link in soup.find_all('a', href=True):
@@ -127,20 +135,13 @@ class PageParser:
         if form and form.get('action'):
             return self._resolve_url(form['action'])
             
-        # Search for URL patterns in text - prioritize submit URLs
-        # First try to find explicit submit URLs
-        submit_url_pattern = r'https?://[^\s<>"\']+/submit/[^\s<>"\']*'
+        # Search for URL patterns in raw HTML as fallback
+        submit_url_pattern = r'https?://[^\s<>"\']+/submit/\d+[^\s<>"\']*'
         match = re.search(submit_url_pattern, html, re.IGNORECASE)
         if match:
             return match.group(0).rstrip('.,;:')
             
-        # Also check for relative submit paths
-        relative_submit_pattern = r'/submit/\d+'
-        match = re.search(relative_submit_pattern, html)
-        if match:
-            return self._resolve_url(match.group(0))
-            
-        # Fallback to answer/api URLs (but not bare /api/ endpoints)
+        # Fallback to answer URLs
         url_pattern = r'https?://[^\s<>"\']+(?:submit|answer)[^\s<>"\']*'
         match = re.search(url_pattern, html, re.IGNORECASE)
         if match:
