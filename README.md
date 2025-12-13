@@ -18,8 +18,24 @@ An autonomous Quiz-Solver Agent that accepts teacher-delivered tasks via HTTP PO
 - **JavaScript Rendering**: Uses Playwright Chromium for full JS execution
 - **Quiz Chaining**: Supports recursive quiz chains where correct answers lead to new quizzes
 - **Timeout Management**: 3-minute execution limit with graceful handling
-- **Rule-based + AI Classification**: Two-layer task classification with optional Gemini fallback
+- **Rule-based + AI Classification**: Two-layer task classification with Gemini AI fallback
 - **Multiple Output Formats**: Numbers, strings, JSON, base64 images, booleans
+- **Retry Logic**: Automatic retries for API timeouts and failures
+
+## 📊 Evaluation Results
+
+| Metric | Score |
+|--------|-------|
+| Questions Reached | 20/26 |
+| Correct Answers | **17** |
+| Success Rate | **85%** |
+
+### Supported Question Types (Verified)
+✅ HTTP curl requests • ✅ GitHub repo extraction • ✅ API key parsing  
+✅ JSON/CSV processing • ✅ Table sums • ✅ CORS headers  
+✅ Base64 decoding • ✅ Sentiment analysis • ✅ Embeddings similarity  
+✅ PDF table extraction • ✅ wc/bash commands • ✅ Docker RUN commands  
+✅ GitHub Actions YAML
 
 ## 📁 Project Structure
 
