@@ -42,6 +42,8 @@ class TaskType(Enum):
     
     API_CALL = "api_call"
     API_MERGE = "api_merge"
+    JWT_DECODE = "jwt_decode"
+    ENCODING_DECODE = "encoding_decode"
     
     TEXT_EXTRACT = "text_extract"
     JSON_RESPONSE = "json_response"
@@ -93,6 +95,8 @@ class TaskClassifier:
         # API
         TaskType.API_CALL: ['call api', 'fetch from api', 'api endpoint', 'http request'],
         TaskType.API_MERGE: ['api with csv', 'merge api', 'combine with api'],
+        TaskType.JWT_DECODE: ['jwt', 'secret_code'],
+        TaskType.ENCODING_DECODE: ['rot13', 'hex', 'base64', 'decode', 'encoding chain', 'encoded', 'unravel'],
         
         # Text/JSON
         TaskType.TEXT_EXTRACT: ['extract', 'find', 'locate', 'parse'],
@@ -101,6 +105,8 @@ class TaskClassifier:
     
     # Priority order for task types (higher priority types checked first)
     PRIORITY_ORDER = [
+        TaskType.ENCODING_DECODE,  # Encoding tasks detected early
+        TaskType.JWT_DECODE,  # JWT tasks should be detected early
         TaskType.API_MERGE, TaskType.API_CALL,
         TaskType.VISUALIZATION_HISTOGRAM, TaskType.VISUALIZATION_BAR,
         TaskType.VISUALIZATION_SCATTER, TaskType.VISUALIZATION_LINE,

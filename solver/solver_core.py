@@ -8,6 +8,8 @@ import logging
 import time
 import re
 import json
+import base64
+import os
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
 
@@ -43,6 +45,7 @@ class QuizSolver:
         self.api_client = APIClient()
         self.csv_processor = CSVProcessor()
         self.chart_generator = ChartGenerator()
+        self.user_email = os.getenv('USER_EMAIL', '')
         
     async def solve(self, url: str) -> Dict[str, Any]:
         """Main solving entry point with quiz chaining support."""
@@ -152,6 +155,12 @@ class QuizSolver:
                 
             elif task_type in [TaskType.API_CALL, TaskType.API_MERGE]:
                 return await self._solve_api(page_data, files, details)
+            
+            elif task_type == TaskType.JWT_DECODE:
+                return await self._solve_jwt(page_data, question)
+            
+            elif task_type == TaskType.ENCODING_DECODE:
+                return await self._solve_encoding(page_data, question)
                 
             else:
                 return await self._solve_text(question, page_data)
@@ -339,6 +348,191 @@ class QuizSolver:
                 logger.warning(f"API call failed: {e}")
                 
         return {}
+    
+    async def _solve_jwt(self, page_data: Dict, question: str) -> Any:
+        """Solve JWT token decoding tasks."""
+        if not self.user_email:
+            logger.error("USER_EMAIL not configured for JWT task")
+            return await self._solve_with_gemini(question, page_data)
+        
+        # Find JWT API endpoint from page data
+        api_endpoints = page_data.get('api_endpoints', [])
+        jwt_endpoint = None
+        
+        for endpoint in api_endpoints:
+            if 'jwt' in endpoint.lower():
+                jwt_endpoint = endpoint
+                break
+        
+        # Also search in instructions/question for JWT endpoint
+        if not jwt_endpoint:
+            jwt_pattern = r'https?://[^\s<>"\']*/api/jwt[^\s<>"\']*'
+            match = re.search(jwt_pattern, question, re.IGNORECASE)
+            if match:
+                jwt_endpoint = match.group(0)
+            else:
+                # Try relative pattern
+                rel_pattern = r'/api/jwt'
+                match = re.search(rel_pattern, question)
+                if match:
+                    # Build from base URL in api_endpoints
+                    for ep in api_endpoints:
+                        if '/api/' in ep:
+                            base = ep.split('/api/')[0]
+                            jwt_endpoint = f"{base}/api/jwt"
+                            break
+        
+        if not jwt_endpoint:
+            logger.warning("Could not find JWT endpoint")
+            return await self._solve_with_gemini(question, page_data)
+        
+        # Add email parameter
+        if '?' in jwt_endpoint:
+            jwt_url = f"{jwt_endpoint}&email={self.user_email}"
+        else:
+            jwt_url = f"{jwt_endpoint}?email={self.user_email}"
+        
+        # Replace placeholder if present
+        jwt_url = jwt_url.replace('YOUR_EMAIL', self.user_email)
+        jwt_url = jwt_url.replace('<YOUR_EMAIL>', self.user_email)
+        
+        logger.info(f"Fetching JWT from: {jwt_url}")
+        
+        try:
+            response = self.api_client.get(jwt_url)
+            data = response.json()
+            token = data.get('token', '')
+            
+            if not token:
+                logger.error("No token in JWT response")
+                return await self._solve_with_gemini(question, page_data)
+            
+            # Decode JWT payload (middle part)
+            parts = token.split('.')
+            if len(parts) != 3:
+                logger.error(f"Invalid JWT format: {token[:50]}...")
+                return await self._solve_with_gemini(question, page_data)
+            
+            # Base64url decode the payload
+            payload_b64 = parts[1]
+            # Add padding if needed
+            padding = 4 - len(payload_b64) % 4
+            if padding != 4:
+                payload_b64 += '=' * padding
+            # Replace base64url chars with base64 chars
+            payload_b64 = payload_b64.replace('-', '+').replace('_', '/')
+            
+            payload_json = base64.b64decode(payload_b64).decode('utf-8')
+            payload = json.loads(payload_json)
+            
+            logger.info(f"Decoded JWT payload: {payload}")
+            
+            # Extract secret_code or similar field
+            if 'secret_code' in payload:
+                return payload['secret_code']
+            elif 'code' in payload:
+                return payload['code']
+            elif 'secret' in payload:
+                return payload['secret']
+            elif 'answer' in payload:
+                return payload['answer']
+            else:
+                # Return first numeric value found
+                for key, value in payload.items():
+                    if isinstance(value, (int, float)) and key != 'exp' and key != 'iat':
+                        return value
+                return payload
+                
+        except Exception as e:
+            logger.error(f"JWT solving failed: {e}")
+            return await self._solve_with_gemini(question, page_data)
+    
+    async def _solve_encoding(self, page_data: Dict, question: str) -> Any:
+        """Solve encoding chain puzzles (Base64, Hex, ROT13, etc.)."""
+        import codecs
+        
+        # Find the encoded data endpoint
+        api_endpoints = page_data.get('api_endpoints', [])
+        encoded_endpoint = None
+        
+        for endpoint in api_endpoints:
+            if 'encoded' in endpoint.lower():
+                encoded_endpoint = endpoint
+                break
+        
+        if not encoded_endpoint:
+            # Try to find from question
+            pattern = r'/api/encoded[^\s<>"\']*'
+            match = re.search(pattern, question)
+            if match:
+                # Build full URL from base
+                for ep in api_endpoints:
+                    if '/api/' in ep:
+                        base = ep.split('/api/')[0]
+                        encoded_endpoint = f"{base}{match.group(0)}"
+                        break
+        
+        if not encoded_endpoint:
+            logger.warning("Could not find encoded endpoint")
+            return await self._solve_with_gemini(question, page_data)
+        
+        logger.info(f"Fetching encoded data from: {encoded_endpoint}")
+        
+        try:
+            response = self.api_client.get(encoded_endpoint)
+            data = response.json()
+            encoded_str = data.get('encoded', data.get('data', data.get('string', '')))
+            
+            if not encoded_str:
+                # Try to get the first string value
+                for key, value in data.items():
+                    if isinstance(value, str) and len(value) > 5:
+                        encoded_str = value
+                        break
+            
+            logger.info(f"Encoded string: {encoded_str[:50]}...")
+            
+            # Detect encoding chain from question
+            question_lower = question.lower()
+            
+            # Determine decoding order (reverse of encoding)
+            # Common pattern: Original → ROT13 → Hex → Base64
+            # Decode order: Base64 → Hex → ROT13
+            
+            decoded = encoded_str
+            
+            # Step 1: Base64 decode
+            if 'base64' in question_lower:
+                try:
+                    padding = 4 - len(decoded) % 4
+                    if padding != 4:
+                        decoded += '=' * padding
+                    decoded = base64.b64decode(decoded).decode('utf-8')
+                    logger.info(f"After Base64 decode: {decoded[:50]}...")
+                except Exception as e:
+                    logger.warning(f"Base64 decode failed: {e}")
+            
+            # Step 2: Hex decode
+            if 'hex' in question_lower:
+                try:
+                    decoded = bytes.fromhex(decoded).decode('utf-8')
+                    logger.info(f"After Hex decode: {decoded[:50]}...")
+                except Exception as e:
+                    logger.warning(f"Hex decode failed: {e}")
+            
+            # Step 3: ROT13 decode
+            if 'rot13' in question_lower:
+                try:
+                    decoded = codecs.decode(decoded, 'rot_13')
+                    logger.info(f"After ROT13 decode: {decoded}")
+                except Exception as e:
+                    logger.warning(f"ROT13 decode failed: {e}")
+            
+            return decoded.strip()
+            
+        except Exception as e:
+            logger.error(f"Encoding solving failed: {e}")
+            return await self._solve_with_gemini(question, page_data)
         
     async def _solve_text(self, question: str, page_data: Dict) -> str:
         """Solve text extraction tasks."""
@@ -410,7 +604,13 @@ Answer:"""
     async def _submit_answer(self, submit_url: str, answer: Any) -> Dict[str, Any]:
         """Submit answer to the quiz endpoint."""
         try:
-            payload = {'answer': answer}
+            # Build payload with email if available
+            if self.user_email:
+                payload = {'email': self.user_email, 'answer': answer}
+            else:
+                payload = {'answer': answer}
+            
+            logger.info(f"Submitting to {submit_url}: {payload}")
             response = self.api_client.post(submit_url, json=payload)
             return response.json()
         except Exception as e:

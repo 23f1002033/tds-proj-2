@@ -52,9 +52,9 @@ class GeminiClient:
     """Wrapper for Gemini API."""
     
     def __init__(self, api_key: Optional[str] = None, api_url: Optional[str] = None):
-        self.api_key = api_key or os.getenv('GEMINI_API_KEY')
-        self.api_url = api_url or os.getenv('GEMINI_API_URL', 
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent')
+        self.api_key = (api_key or os.getenv('GEMINI_API_KEY', '')).strip()
+        self.api_url = (api_url or os.getenv('GEMINI_API_URL', 
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash')).strip()
         self.max_retries = 3
         
     def call(self, prompt: str, model_args: Optional[Dict] = None) -> Dict[str, Any]:

@@ -127,11 +127,24 @@ class PageParser:
         if form and form.get('action'):
             return self._resolve_url(form['action'])
             
-        # Search for URL patterns in text
-        url_pattern = r'https?://[^\s<>"\']+(?:submit|answer|api)[^\s<>"\']*'
+        # Search for URL patterns in text - prioritize submit URLs
+        # First try to find explicit submit URLs
+        submit_url_pattern = r'https?://[^\s<>"\']+/submit/[^\s<>"\']*'
+        match = re.search(submit_url_pattern, html, re.IGNORECASE)
+        if match:
+            return match.group(0).rstrip('.,;:')
+            
+        # Also check for relative submit paths
+        relative_submit_pattern = r'/submit/\d+'
+        match = re.search(relative_submit_pattern, html)
+        if match:
+            return self._resolve_url(match.group(0))
+            
+        # Fallback to answer/api URLs (but not bare /api/ endpoints)
+        url_pattern = r'https?://[^\s<>"\']+(?:submit|answer)[^\s<>"\']*'
         match = re.search(url_pattern, html, re.IGNORECASE)
         if match:
-            return match.group(0)
+            return match.group(0).rstrip('.,;:')
             
         return None
         
