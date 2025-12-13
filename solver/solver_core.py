@@ -795,9 +795,16 @@ RETURN ONLY THE FINAL ANSWER - no explanation, no markdown, no quotes around tex
 
 ANSWER:"""
             
-            result = self.gemini_client.call(prompt, {'temperature': 0.1, 'maxOutputTokens': 500})
+            # Retry up to 2 times if Gemini fails
+            result = None
+            for attempt in range(3):
+                result = self.gemini_client.call(prompt, {'temperature': 0.1, 'maxOutputTokens': 500})
+                if result is not None:
+                    break
+                logger.warning(f"Gemini returned None, retry {attempt + 1}/3")
+            
             if result is None:
-                logger.warning("Gemini returned None, falling back")
+                logger.warning("Gemini returned None after retries, falling back")
                 return ""
             answer = result.get('text', '').strip()
             
