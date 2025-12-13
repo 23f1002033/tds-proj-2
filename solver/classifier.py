@@ -95,8 +95,8 @@ class TaskClassifier:
         # API
         TaskType.API_CALL: ['call api', 'fetch from api', 'api endpoint', 'http request'],
         TaskType.API_MERGE: ['api with csv', 'merge api', 'combine with api'],
-        TaskType.JWT_DECODE: ['jwt', 'secret_code'],
-        TaskType.ENCODING_DECODE: ['rot13', 'hex', 'base64', 'decode', 'encoding chain', 'encoded', 'unravel'],
+        TaskType.JWT_DECODE: ['jwt', 'jwt token', 'secret_code', 'decode a jwt', 'decode the jwt'],
+        TaskType.ENCODING_DECODE: ['rot13', 'hex', 'encoding chain', 'multi-layer encoding', 'unravel'],
         
         # Text/JSON
         TaskType.TEXT_EXTRACT: ['extract', 'find', 'locate', 'parse'],
