@@ -62,16 +62,33 @@ class QuizSolver:
                     result = await self._solve_single_quiz(browser, current_url)
                     results.append(result)
                     
-                    # Check for next quiz URL
-                    if result.get('correct') and result.get('next_url'):
-                        current_url = result['next_url']
-                        logger.info(f"Chaining to next quiz: {current_url}")
+                    # Check for next quiz URL - continue even if answer is wrong!
+                    # Per project spec: "If your answer is wrong, you may receive the next url to proceed to"
+                    next_url = result.get('next_url')
+                    correct = result.get('correct')
+                    
+                    if next_url:
+                        # Always proceed to next URL if provided
+                        current_url = next_url
+                        logger.info(f"Proceeding to next quiz: {current_url} (correct: {correct})")
+                    elif not correct and self._check_timeout():
+                        # Answer wrong and no next URL - could retry (optional)
+                        logger.warning(f"Wrong answer at {current_url}, no next URL provided")
+                        current_url = None
                     else:
+                        # Correct answer, no more quizzes
+                        logger.info("Quiz chain completed successfully")
                         current_url = None
                         
                 except Exception as e:
                     logger.error(f"Error solving quiz: {e}")
                     results.append({'error': str(e), 'url': current_url})
+                    # Don't break - try to continue if there's another URL from previous result
+                    if results and results[-2:]:
+                        last_result = results[-2] if len(results) > 1 else None
+                        if last_result and last_result.get('next_url'):
+                            current_url = last_result['next_url']
+                            continue
                     break
                     
         self.downloader.cleanup()
