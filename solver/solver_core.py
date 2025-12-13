@@ -817,7 +817,8 @@ Answer:"""
             try:
                 return json.loads(answer)
             except:
-                return {"value": str(answer)}
+                # Return raw string - let the server handle format
+                return str(answer)
                 
         elif output_format == 'boolean':
             if isinstance(answer, bool):
@@ -830,7 +831,8 @@ Answer:"""
                 return answer
             return str(answer)
             
-        return str(answer)
+        # Return raw value for text/string format
+        return str(answer) if not isinstance(answer, (dict, list)) else answer
         
     async def _submit_answer(self, submit_url: str, answer: Any) -> Dict[str, Any]:
         """Submit answer to the quiz endpoint."""
