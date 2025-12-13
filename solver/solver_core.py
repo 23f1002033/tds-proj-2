@@ -725,15 +725,18 @@ Answer:"""
             # Build comprehensive context
             context_parts = []
             
-            # Add file contents if available
-            for filepath, filetype in files[:3]:  # Limit to 3 files
+            # Add file contents if available  
+            # files are dicts with 'path' and 'type' keys
+            for f in files[:3]:  # Limit to 3 files
                 try:
+                    filepath = f.get('path') if isinstance(f, dict) else f[0]
+                    filetype = f.get('type') if isinstance(f, dict) else f[1]
                     if filetype in ['csv', 'txt', 'json', 'md']:
-                        with open(filepath, 'r') as f:
-                            content = f.read()[:2000]
-                            context_parts.append(f"File ({filetype}): {content}")
-                except:
-                    pass
+                        with open(filepath, 'r') as file:
+                            content = file.read()[:5000]  # Increased for better context
+                            context_parts.append(f"FILE CONTENT ({filetype}):\n{content}")
+                except Exception as e:
+                    logger.warning(f"Failed to read file: {e}")
             
             # Add table data
             if page_data.get('tables'):
