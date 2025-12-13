@@ -85,6 +85,7 @@ async def root():
 
 class QuizRequest(BaseModel):
     """Request model for quiz solving endpoint."""
+    email: str
     url: str
     secret: str
     timeout: Optional[int] = 180  # 3 minutes default
@@ -101,11 +102,11 @@ class QuizResponse(BaseModel):
 task_results = {}
 
 
-async def solve_quiz_background(task_id: str, url: str, timeout: int):
+async def solve_quiz_background(task_id: str, email: str, secret: str, url: str, timeout: int):
     """Background task to solve a quiz."""
     try:
         logger.info(f"[{task_id}] Starting quiz solving for URL: {url}")
-        solver = QuizSolver(timeout=timeout)
+        solver = QuizSolver(email=email, secret=secret, timeout=timeout)
         result = await solver.solve(url)
         task_results[task_id] = {
             "status": "completed",
@@ -153,10 +154,12 @@ async def solve_quiz(request: QuizRequest, background_tasks: BackgroundTasks):
     # Initialize task tracking
     task_results[task_id] = {"status": "processing"}
     
-    # Launch background task
+    # Launch background task with email and secret
     background_tasks.add_task(
         solve_quiz_background,
         task_id,
+        request.email,
+        request.secret,
         request.url,
         request.timeout
     )

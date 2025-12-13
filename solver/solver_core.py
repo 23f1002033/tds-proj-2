@@ -30,10 +30,14 @@ logger = logging.getLogger(__name__)
 class QuizSolver:
     """Main quiz solving engine with recursive loop handling."""
     
-    def __init__(self, timeout: int = 180):
-        """Initialize solver with timeout in seconds."""
+    def __init__(self, email: str = '', secret: str = '', timeout: int = 180):
+        """Initialize solver with email, secret and timeout."""
         self.timeout = timeout
         self.start_time = None
+        self.email = email or os.getenv('USER_EMAIL', '')
+        self.secret = secret
+        self.current_quiz_url = None  # Track current quiz URL for submission
+        
         self.gemini_client = None
         try:
             self.gemini_client = GeminiClient()
@@ -45,7 +49,6 @@ class QuizSolver:
         self.api_client = APIClient()
         self.csv_processor = CSVProcessor()
         self.chart_generator = ChartGenerator()
-        self.user_email = os.getenv('USER_EMAIL', '')
         
     async def solve(self, url: str) -> Dict[str, Any]:
         """Main solving entry point with quiz chaining support."""
@@ -76,6 +79,9 @@ class QuizSolver:
         
     async def _solve_single_quiz(self, browser: BrowserManager, url: str) -> Dict[str, Any]:
         """Solve a single quiz page."""
+        # Track current quiz URL for submission
+        self.current_quiz_url = url
+        
         # Load page
         page = await browser.load_page(url)
         content = await browser.get_page_content(page)
@@ -351,7 +357,7 @@ class QuizSolver:
     
     async def _solve_jwt(self, page_data: Dict, question: str) -> Any:
         """Solve JWT token decoding tasks."""
-        if not self.user_email:
+        if not self.email:
             logger.error("USER_EMAIL not configured for JWT task")
             return await self._solve_with_gemini(question, page_data)
         
@@ -388,13 +394,13 @@ class QuizSolver:
         
         # Add email parameter
         if '?' in jwt_endpoint:
-            jwt_url = f"{jwt_endpoint}&email={self.user_email}"
+            jwt_url = f"{jwt_endpoint}&email={self.email}"
         else:
-            jwt_url = f"{jwt_endpoint}?email={self.user_email}"
+            jwt_url = f"{jwt_endpoint}?email={self.email}"
         
         # Replace placeholder if present
-        jwt_url = jwt_url.replace('YOUR_EMAIL', self.user_email)
-        jwt_url = jwt_url.replace('<YOUR_EMAIL>', self.user_email)
+        jwt_url = jwt_url.replace('YOUR_EMAIL', self.email)
+        jwt_url = jwt_url.replace('<YOUR_EMAIL>', self.email)
         
         logger.info(f"Fetching JWT from: {jwt_url}")
         
@@ -604,11 +610,13 @@ Answer:"""
     async def _submit_answer(self, submit_url: str, answer: Any) -> Dict[str, Any]:
         """Submit answer to the quiz endpoint."""
         try:
-            # Build payload with email if available
-            if self.user_email:
-                payload = {'email': self.user_email, 'answer': answer}
-            else:
-                payload = {'answer': answer}
+            # Build payload with all required fields per project spec
+            payload = {
+                'email': self.email,
+                'secret': self.secret,
+                'url': self.current_quiz_url,
+                'answer': answer
+            }
             
             logger.info(f"Submitting to {submit_url}: {payload}")
             response = self.api_client.post(submit_url, json=payload)
