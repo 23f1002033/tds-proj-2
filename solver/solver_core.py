@@ -271,25 +271,27 @@ class QuizSolver:
                 
                 # Use Gemini to extract the specific value requested
                 if text and self.gemini_client:
-                    prompt = f"""Extract the specific numeric value requested from this PDF text.
+                    prompt = f"""Extract the EXACT numeric value from this PDF.
 
 QUESTION: {question}
 
 PDF CONTENT:
 {text[:8000]}
 
-Look for the exact value mentioned in the question (e.g., "Q2 Summary" line, specific totals).
-Return ONLY the numeric value, rounded to 2 decimal places.
+CRITICAL: Read the question carefully! If it asks for "Q2 Summary", find ONLY the Q2 Summary line, NOT Q1 or Q3.
+Look for patterns like "Q2 Summary: Total Operating Expenses: $X,XXX.XX"
+
+Return ONLY the number (without $ or commas), rounded to 2 decimal places.
 
 ANSWER:"""
-                    result = self.gemini_client.call(prompt, {'temperature': 0.1, 'maxOutputTokens': 100})
+                    result = self.gemini_client.call(prompt, {'temperature': 0.0, 'maxOutputTokens': 50})
                     if result:
                         answer = result.get('text', '').strip()
-                        # Extract number from answer
+                        # Extract number from answer (handle commas)
                         import re
-                        nums = re.findall(r'-?\d+\.?\d*', answer.replace(',', ''))
+                        nums = re.findall(r'-?[\d,]+\.?\d*', answer)
                         if nums:
-                            return round(float(nums[0]), 2)
+                            return round(float(nums[0].replace(',', '')), 2)
                 
                 # Fallback: try table extraction
                 tables = processor.extract_tables()
