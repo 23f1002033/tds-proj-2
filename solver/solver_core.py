@@ -770,6 +770,9 @@ RETURN ONLY THE FINAL ANSWER - no explanation, no markdown, no quotes around tex
 ANSWER:"""
             
             result = self.gemini_client.call(prompt, {'temperature': 0.1, 'maxOutputTokens': 500})
+            if result is None:
+                logger.warning("Gemini returned None, falling back")
+                return ""
             answer = result.get('text', '').strip()
             
             # Clean up the answer
