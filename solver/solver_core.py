@@ -730,22 +730,23 @@ Answer:"""
             
             context = "\n\n".join(context_parts)
             
-            prompt = f"""You are a quiz-solving AI. Solve this problem step by step and provide ONLY the final answer.
+            prompt = f"""You are solving a quiz. Read the question CAREFULLY and return EXACTLY what is asked.
 
-QUESTION: {question}
+FULL QUESTION TEXT:
+{question}
 
-AVAILABLE DATA:
+ADDITIONAL DATA:
 {context}
 
-INSTRUCTIONS FROM PAGE:
-{page_data.get('instructions', [])[:10]}
+CRITICAL INSTRUCTIONS:
+1. Look for "JSON Structure" or "answer" examples in the question - they show EXACT format expected
+2. If asked for a command, provide the EXACT command string (not the output)
+3. If asked for a number, return ONLY the number
+4. If asked for text, return ONLY the text without quotes
+5. Replace placeholders like <URL> with actual values from the question
+6. The base URL is: https://tds-llm-analysis.s-anand.net
 
-Think through this carefully:
-1. What is being asked?
-2. What data do I have?
-3. What computation or extraction is needed?
-
-IMPORTANT: Return ONLY the final answer - no explanation. If it's a number, return the number. If it's text, return the text. If it's JSON, return valid JSON.
+RETURN ONLY THE FINAL ANSWER - no explanation, no markdown, no quotes around text.
 
 ANSWER:"""
             
