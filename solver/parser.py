@@ -119,6 +119,12 @@ class PageParser:
             # Reconstruct URL without space
             return self._resolve_url(f'/submit/{match.group(1)}')
         
+        # Look for /submit (without number) - for demo endpoint
+        submit_bare_pattern = r'/submit(?:\s|$|["\'])'
+        match = re.search(submit_bare_pattern, page_text)
+        if match:
+            return self._resolve_url('/submit')
+        
         # Look for links containing "submit" or "answer"
         for link in soup.find_all('a', href=True):
             href = link['href']
